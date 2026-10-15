@@ -1,6 +1,6 @@
 """
 Analytics Avenue · Resume Analyzer — AI chatbot for HR.
-No login: the chat opens directly. Admin tab: only ADMIN_EMAILS (private app) or ADMIN_PASSWORD.
+Open link: Chat for everyone. Admin tab opens only for ADMIN_EMAILS + ADMIN_PASSWORD.
 Run:  streamlit run app.py
 """
 import hmac
@@ -25,52 +25,42 @@ store.db()  # connect + load the 99 bundled candidates on first run
 ss = st.session_state
 ADMIN_PASSWORD = get_secret("ADMIN_PASSWORD", "")
 ADMIN_EMAILS = [e.strip().lower() for e in str(get_secret("ADMIN_EMAILS", "")).split(",") if e.strip()]
-
-
-def viewer_email() -> str:
-    """Email of the person viewing the app (works when the Streamlit app is shared privately)."""
-    try:
-        return (st.user.get("email") or "").strip().lower()
-    except Exception:
-        return ""
-
-
-email = viewer_email()
-is_admin = bool(email) and email in ADMIN_EMAILS
-ss.user_email = email or "hr"
 ss.setdefault("user_role", "hr")
-if is_admin:
-    ss.user_role = "admin"
+ss.setdefault("user_email", "hr")
 
 
 def admin_gate():
+    # Open link: the app can't know who is visiting, so admins sign in here with their email + password.
     if ss.user_role != "admin":
         theme.brand_bar("Admin console", pill="Admin")
         _, mid, _ = st.columns([1, 1.2, 1])
         with mid:
             with st.form("admin_unlock"):
-                pw = st.text_input("Admin password", type="password")
-                ok = st.form_submit_button("Unlock Admin", type="primary", width="stretch")
+                em = st.text_input("Admin email")
+                pw = st.text_input("Password", type="password")
+                ok = st.form_submit_button("Open Admin", type="primary", width="stretch")
             if ok:
-                if not ADMIN_PASSWORD:
-                    st.error("Set ADMIN_PASSWORD in Streamlit secrets first.")
-                elif hmac.compare_digest(pw or "", ADMIN_PASSWORD):
-                    ss.user_role = "admin"
-                    st.rerun()
-                else:
+                em = (em or "").strip().lower()
+                if not ADMIN_PASSWORD or not ADMIN_EMAILS:
+                    st.error("Set ADMIN_EMAILS and ADMIN_PASSWORD in Streamlit secrets first.")
+                elif em not in ADMIN_EMAILS:
+                    st.error("This email is not an admin.")
+                elif not hmac.compare_digest(pw or "", ADMIN_PASSWORD):
                     st.error("Wrong password.")
+                else:
+                    ss.user_role, ss.user_email = "admin", em
+                    st.rerun()
         return
 
     def lock():
-        ss.user_role = "hr"
+        ss.user_role, ss.user_email = "hr", "hr"
         st.rerun()
 
-    admin_page(on_lock=None if is_admin else lock)
+    admin_page(on_lock=lock)
 
 
-pages = [st.Page(chat_page, title="Chat", default=True, url_path="chat")]
-# Admin emails set  -> only those emails see the Admin tab.
-# No admin emails   -> Admin tab is shown to everyone but needs ADMIN_PASSWORD.
-if is_admin or not ADMIN_EMAILS:
-    pages.append(st.Page(admin_gate, title="Admin", url_path="admin"))
+pages = [
+    st.Page(chat_page, title="Chat", default=True, url_path="chat"),
+    st.Page(admin_gate, title="Admin", url_path="admin"),
+]
 st.navigation(pages, position="top").run()
