@@ -104,8 +104,7 @@ def chat_page():
 
     df = store.candidates_df()
     theme.brand_bar("Candidate search assistant",
-                    kpis=[("Candidates", len(df)), ("Openings", len(store.openings(active_only=True))),
-                          ("Sectors", len({s for x in df["project_sectors"] for s in x}))])
+                    kpis=[("Candidates", len(df)), ("Sectors", len({s for x in df["project_sectors"] for s in x}))])
 
     if ss.chat or ss.get("pending"):
         _, right = st.columns([5, 1])
